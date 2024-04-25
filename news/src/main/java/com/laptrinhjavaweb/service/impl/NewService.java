@@ -1,10 +1,14 @@
 package com.laptrinhjavaweb.service.impl;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
 import java.util.stream.Collectors;
 
+import com.laptrinhjavaweb.entity.ImageEntity;
+import com.laptrinhjavaweb.repository.ImageRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -30,7 +34,7 @@ public class NewService implements INewService{
 	private NewConverter newConverter;
 
 	@Autowired
-	private NewConverter newMapper;
+	private ImageRepository imageRepository;
 
 	@Override
 	public NewDTO save(NewDTO newDTO, String loggedInUser, String action) {
@@ -235,6 +239,11 @@ public class NewService implements INewService{
 	}
 
 	@Override
+	public List<ImageEntity> getAllImage() {
+		return imageRepository.findAll();
+	}
+
+	@Override
 	public List<NewDTO> findAll() {
 		List<NewDTO> result = new ArrayList<>();
 		List<NewEntity> entities = newRepository.findAll();
@@ -246,6 +255,126 @@ public class NewService implements INewService{
 			}
 			result.add(newDTO);
 		}
+		return result;
+	}
+
+	/*public int countNewPostsByDateRange(Date startDate, Date endDate) {
+		return newRepository.countByDateRange(startDate, endDate);
+	}*/
+
+	/*public List<Map<String, Object>> getNewPostCountsByDateRange(Date startDate, Date endDate) {
+		List<Object[]> counts = newRepository.countByDateRange(startDate, endDate);
+
+		List<Map<String, Object>> result = new ArrayList<>();
+
+		for (Object[] count : counts) {
+			Map<String, Object> formattedEntry = new HashMap<>();
+			Date originalDate = (Date) count[0];
+
+			// Chuyển đổi ngày về múi giờ cục bộ
+			ZonedDateTime localDate = originalDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate().atStartOfDay(ZoneId.systemDefault());
+
+			// Chuyển đổi lại ngày sang định dạng chuẩn
+			String dateString = localDate.toInstant().truncatedTo(ChronoUnit.DAYS).toString();
+			Long currentCount = (Long) count[1];
+
+			formattedEntry.put("date", dateString);
+			formattedEntry.put("count", currentCount);
+			result.add(formattedEntry);
+		}
+
+		// Sắp xếp lại danh sách theo ngày
+		result.sort((e1, e2) -> ((String) e1.get("date")).compareTo((String) e2.get("date")));
+
+		return result;
+	}*/
+	/*public List<Map<String, Object>> getNewPostCountsByDateRange(Date startDate, Date endDate) {
+		List<Object[]> counts = newRepository.countByDateRange(startDate, endDate);
+
+		// Tạo map để lưu trữ kết quả
+		Map<String, Long> dateCountsMap = new HashMap<>();
+
+		// Xử lý kết quả trả về từ cơ sở dữ liệu
+		for (Object[] count : counts) {
+			Date originalDate = (Date) count[0];
+
+			// Chuyển đổi ngày về múi giờ cục bộ
+			LocalDate localDate = originalDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+
+			// Chuyển đổi lại ngày sang định dạng chuẩn
+			String dateString = localDate.toString();
+
+			Long currentCount = (Long) count[1];
+			dateCountsMap.put(dateString, dateCountsMap.getOrDefault(dateString, 0L) + currentCount);
+		}
+
+		// Tạo danh sách ngày trong khoảng từ startDate đến endDate
+		List<LocalDate> dateRange = new ArrayList<>();
+		LocalDate startLocalDate = startDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+		LocalDate endLocalDate = endDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+
+		for (LocalDate date = startLocalDate; !date.isAfter(endLocalDate); date = date.plusDays(1)) {
+			dateRange.add(date);
+		}
+
+		// Tạo kết quả cuối cùng
+		List<Map<String, Object>> result = new ArrayList<>();
+
+		for (LocalDate date : dateRange) {
+			String dateString = date.toString();
+			Long count = dateCountsMap.getOrDefault(dateString, 0L);
+
+			Map<String, Object> formattedEntry = new HashMap<>();
+			formattedEntry.put("date", dateString);
+			formattedEntry.put("count", count);
+			result.add(formattedEntry);
+		}
+
+		return result;
+	}*/
+	public List<Map<String, Object>> getNewPostCountsByDateRange(Date startDate, Date endDate) {
+		List<Object[]> counts = newRepository.countByDateRangeWithStatus(startDate, endDate, 1); // Thêm điều kiện status = 1
+
+		// Tạo map để lưu trữ kết quả
+		Map<String, Long> dateCountsMap = new HashMap<>();
+
+		// Xử lý kết quả trả về từ cơ sở dữ liệu
+		for (Object[] count : counts) {
+			Date originalDate = (Date) count[0];
+
+			// Chuyển đổi ngày về múi giờ cục bộ
+			LocalDate localDate = originalDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+
+			// Chuyển đổi lại ngày sang định dạng chuẩn
+			String dateString = localDate.toString();
+
+			Long currentCount = (Long) count[1];
+			dateCountsMap.put(dateString, dateCountsMap.getOrDefault(dateString, 0L) + currentCount);
+		}
+
+		// Tạo danh sách ngày trong khoảng từ startDate đến endDate
+		List<LocalDate> dateRange = new ArrayList<>();
+		LocalDate startLocalDate = startDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+		LocalDate endLocalDate = endDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+
+		for (LocalDate date = startLocalDate; !date.isAfter(endLocalDate); date = date.plusDays(1)) {
+			dateRange.add(date);
+		}
+
+		// Tạo kết quả cuối cùng
+		List<Map<String, Object>> result = new ArrayList<>();
+
+		for (LocalDate date : dateRange) {
+			String dateString = date.toString();
+			Long count = dateCountsMap.getOrDefault(dateString, 0L);
+
+			Map<String, Object> formattedEntry = new HashMap<>();
+			formattedEntry.put("date", dateString);
+			formattedEntry.put("dayOfWeek", date.getDayOfWeek().toString()); // Thêm thứ vào kết quả
+			formattedEntry.put("count", count);
+			result.add(formattedEntry);
+		}
+
 		return result;
 	}
 

@@ -10,16 +10,18 @@ import com.laptrinhjavaweb.repository.RoleRepository;
 import com.laptrinhjavaweb.repository.UserRepository;
 import com.laptrinhjavaweb.repository.UserRoleRepository;
 import com.laptrinhjavaweb.service.IUserService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.persistence.EntityManager;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @Service
 public class UserService implements IUserService {
@@ -28,16 +30,12 @@ public class UserService implements IUserService {
 
     @Autowired
     private UserRepository userRepository;
-
     @Autowired
     private UserConverter userConverter;
-
     @Autowired
     private EntityManager entityManager;
-
     @Autowired
     private RoleRepository roleRepository;
-
     @Autowired
     private UserRoleRepository userRoleRepository;
 
@@ -71,29 +69,15 @@ public class UserService implements IUserService {
     }
 
     /*public boolean hasAdminRole(String userName) {
-        String query = "SELECT COUNT(*) FROM UserEntity u JOIN u.roles r WHERE u.userName = :userName AND r.code = 'ADMIN'";
-        Long count = entityManager.createQuery(query, Long.class)
-                .setParameter("userName", userName)
-                .getSingleResult();
-        return count > 0;
-    }
-
-    public boolean hasAdminTheThao(String userName) {
-        String query = "SELECT COUNT(*) FROM UserEntity u JOIN u.roles r WHERE u.userName = :userName AND r.code = 'ADMIN1'";
-        Long count = entityManager.createQuery(query, Long.class)
-                .setParameter("userName", userName)
-                .getSingleResult();
-        return count > 0;
-    }*/
-    /*public boolean hasAdminRole(String userName) {
-        String query = "SELECT COUNT(*) FROM UserEntity u JOIN u.roles r WHERE u.userName = :userName AND r.code LIKE 'ADMIN%'";
-        Long count = entityManager.createQuery(query, Long.class)
-                .setParameter("userName", userName)
-                .getSingleResult();
-        return count > 0;
-    }*/
-    public boolean hasAdminRole(String userName) {
         String query = "SELECT COUNT(*) FROM UserEntity u JOIN u.roles r WHERE (u.userName = :userName OR (u.userName = 'phong-vien' AND r.code LIKE 'ADMIN%'))";
+        Long count = entityManager.createQuery(query, Long.class)
+                .setParameter("userName", userName)
+                .getSingleResult();
+        return count > 0;
+    }*/
+
+    public boolean hasAdminRole(String userName) {
+        String query = "SELECT COUNT(*) FROM UserEntity u JOIN u.roles r WHERE u.userName = :userName AND (r.code = 'phong-vien' OR r.code LIKE 'ADMIN%')";
         Long count = entityManager.createQuery(query, Long.class)
                 .setParameter("userName", userName)
                 .getSingleResult();
@@ -142,4 +126,137 @@ public class UserService implements IUserService {
             return roleCodes.get(0);
         }
     }
+    @Override
+    @Transactional
+    public void saveUser(UserDTO userDTO) {
+        UserEntity userEntity = userConverter.toEntity(userDTO);
+        RoleEntity defaultRole = roleRepository.findById(2L).orElse(null);
+        List<RoleEntity> defaultRoles = new ArrayList<>();
+        if (defaultRole != null) {
+            defaultRoles.add(defaultRole);
+        }
+
+        // Gán danh sách Role mặc định cho User
+        userEntity.setRoles(defaultRoles);
+        userRepository.save(userEntity);
+    }
+    @Override
+    @Transactional(readOnly = true)
+    public UserDTO getUserById(Long userId) {
+        UserEntity userEntity = userRepository.findById(userId).orElse(null);
+        return userEntity != null ? userConverter.toDTO(userEntity) : null;
+    }
+
+    public boolean existsByUsername(String username) {
+        return userRepository.existsByUserName(username);
+    }
+
+    @Override
+    public boolean existsByUsername1(String username) {
+        return userRepository.existsByUserName(username);
+    }
+
+    public Long addUser(UserDTO userDTO, String loggedInUser, Long roleId) {
+        UserEntity userEntity = new UserEntity();
+        // Kiểm tra tính duy nhất của username trước khi thêm
+        if (existsByUsername(userDTO.getUserName())) {
+            return null;
+        }
+        userEntity = userConverter.toEntity(userDTO);
+        userEntity.setStatus(1);
+        userEntity.setCreatedBy(loggedInUser);
+        /*// Lưu (persist) người dùng mới vào cơ sở dữ liệu
+        UserEntity savedUser = userRepository.save(userEntity);
+
+        addUserRole(savedUser.getId(), roleId);*/
+
+        // Lưu (persist) người dùng mới vào cơ sở dữ liệu
+        UserEntity savedUser = userRepository.save(userEntity);
+
+        // Kiểm tra và gán vai trò cho người dùng
+        try {
+            addUserRole(savedUser.getId(), roleId);
+        } catch (Exception e) {
+            // Nếu có lỗi xảy ra, xóa người dùng vừa thêm và ném ra ngoại lệ
+            deleteUser(new long[]{savedUser.getId()});
+            throw new RuntimeException("Error assigning role to user", e);
+        }
+
+        // Trả về ID của người dùng vừa được thêm
+        return savedUser.getId();
+    }
+
+    public void addUserRole(Long userId, Long roleId){
+        UserRoleEntity userRoleEntity = new UserRoleEntity();
+        UserEntity userEntity = new UserEntity();
+        RoleEntity roleEntity = new RoleEntity();
+        userRoleEntity.setUserId(userId);
+        userRoleEntity.setRoleId(roleId);
+
+        userEntity.getRoles().add(roleEntity);
+        userRoleRepository.save(userRoleEntity);
+    }
+
+    public List<UserDTO> getAllUser() {
+        List<UserEntity> userEntityList = userRepository.findAll();
+        return userConverter.toDtoList(userEntityList);
+    }
+
+    @Override
+    public List<UserDTO> findAll(Pageable pageable) {
+        List<UserDTO> results = new ArrayList<>();
+        List<UserEntity> entities = userRepository.findAll(pageable).getContent();
+        for(UserEntity item: entities){
+            UserDTO userDTO = userConverter.toDTO(item);
+            results.add(userDTO);
+        }
+        return results;
+    }
+
+    @Override
+    public int totalItem() {
+        return (int) userRepository.count();
+    }
+
+    @Override
+    public void deleteUser(long[] ids) {
+        for (long id : ids) {
+            try {
+                userRepository.deleteById(id);
+            } catch (DataIntegrityViolationException e) {
+                throw new IllegalArgumentException("Không thể xóa người dùng với id: " + id );
+            } catch (Exception e) {
+                throw new RuntimeException("Đã xảy ra lỗi khi xóa người dùng với id: " + id, e);
+            }
+        }
+    }
+
+    @Override
+    public void updateUser(long id,UserDTO userDTO, long role_id) throws Exception {
+            UserEntity existUser = userRepository.findById(id)
+                    .orElseThrow(()->new UsernameNotFoundException("not found"));
+            if (existsByUsername(userDTO.getUserName())) {
+                throw new Exception("Username already exists");
+            }
+            if (existUser != null) {
+                existUser.setFullName(userDTO.getFullName());
+                existUser.setUserName(userDTO.getUserName());
+                existUser.setPassword(userDTO.getPassword());
+                userRepository.save(existUser);
+                addUserRole(id, role_id);
+            }
+    }
 }
+    /*public List<UserDTO> getAllUserPaging(Pageable pageable) {
+        List<UserDTO> result = new ArrayList<>();
+        List<UserEntity> entities = userRepository.findAllAndPaging(pageable);
+        for(UserEntity item : entities) {
+            UserDTO userDTO = userConverter.toDTO(item);
+            result.add(userDTO);
+        }
+        return result;
+    }
+
+    public int totalItem() {
+        return (int) userRepository.count();
+    }*/

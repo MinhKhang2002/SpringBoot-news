@@ -15,4 +15,34 @@ public class PageController {
     public String showPagePhongVien() {
         return "/views/phongvien/index";
     }
+
+    @GetMapping("/addUser")
+    public String addUser() {
+        return "/views/admin/addUser";
+    }
+
+    @GetMapping("/listUser")
+    public String listUser() {
+        return "/views/admin/userList";
+    }
+
+    @GetMapping("/categoryList")
+    public String categoryList() {
+        return "/views/admin/categoryList";
+    }
+
+    @GetMapping("/roleList")
+    public String roleList() {
+        return "/views/admin/roleList";
+    }
+
+    @GetMapping("/addRole")
+    public String addRole() {
+        return "/views/admin/addRole";
+    }
+
+    @GetMapping("/test")
+    public String test() {
+        return "/views/admin/users/addUserForm";
+    }
 }
